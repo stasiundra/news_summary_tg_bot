@@ -110,9 +110,19 @@ async def cmd_start(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
         f"👋 Привет, {first_name}!\n\n"
         "Доступные команды:\n"
         "/digest — получить дайджест\n"
+        "/ask — задать вопрос по новостям\n"
         "/channels — список каналов\n"
         "/status — статистика"
     )
+
+
+@allowed_only
+async def cmd_ask(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
+    keyboard = InlineKeyboardMarkup([[
+        InlineKeyboardButton("📅 За сутки", callback_data="ask_24h"),
+        InlineKeyboardButton("📆 За неделю", callback_data="ask_168h"),
+    ]])
+    await update.message.reply_text("За какой период искать?", reply_markup=keyboard)
 
 
 @allowed_only
@@ -485,6 +495,7 @@ def main() -> None:
     # User commands
     app.add_handler(CommandHandler("start", cmd_start))
     app.add_handler(CommandHandler("digest", cmd_digest))
+    app.add_handler(CommandHandler("ask", cmd_ask))
     app.add_handler(CommandHandler("channels", cmd_channels))
     app.add_handler(CommandHandler("status", cmd_status))
 
