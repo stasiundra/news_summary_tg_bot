@@ -4,8 +4,8 @@ from dotenv import load_dotenv
 load_dotenv()
 
 BOT_TOKEN: str = os.environ["BOT_TOKEN"]
-TG_API_ID: int = int(os.environ["TG_API_ID"])
-TG_API_HASH: str = os.environ["TG_API_HASH"]
+TG_API_ID: int = int(os.environ["TG_API_ID"]) if os.environ.get("TG_API_ID") else 0
+TG_API_HASH: str = os.environ.get("TG_API_HASH", "")
 ANTHROPIC_API_KEY: str = os.environ["ANTHROPIC_API_KEY"]
 OWNER_ID: int = int(os.environ["OWNER_ID"])
 
