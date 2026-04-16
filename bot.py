@@ -13,6 +13,8 @@ from telegram.ext import (
     CallbackQueryHandler,
     CommandHandler,
     ContextTypes,
+    MessageHandler,
+    filters,
 )
 
 import collector
@@ -174,17 +176,23 @@ async def _handle_digest_callback(update: Update, context: ContextTypes.DEFAULT_
     result = await summarizer.generate_digest(posts, label)
     html_result = _md_to_html(result)
 
+    ask_keyboard = InlineKeyboardMarkup([[
+        InlineKeyboardButton("💬 Задать вопрос", callback_data=f"ask_{hours}h")
+    ]])
+
     if len(html_result) <= 4096:
-        await query.edit_message_text(html_result, parse_mode="HTML")
+        await query.edit_message_text(html_result, parse_mode="HTML", reply_markup=ask_keyboard)
     else:
         await query.edit_message_text("📨 Отправляю частями...")
         chunks = _split_text(html_result)
         total = len(chunks)
         for i, chunk in enumerate(chunks, 1):
+            is_last = i == total
             await context.bot.send_message(
                 chat_id=query.message.chat_id,
                 text=f"[{i}/{total}]\n{chunk}",
                 parse_mode="HTML",
+                reply_markup=ask_keyboard if is_last else None,
             )
 
 
@@ -199,6 +207,58 @@ async def cb_digest(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
         await _handle_digest_callback(update, context, 24, "сутки")
     elif data == "digest_7d":
         await _handle_digest_callback(update, context, 168, "неделю")
+
+
+async def cb_ask_start(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
+    """User clicked 'Задать вопрос' — store period and prompt for input."""
+    query = update.callback_query
+    user_id = update.effective_user.id
+    if not await database.is_allowed_user(user_id):
+        await query.answer("⛔ Нет доступа", show_alert=True)
+        return
+
+    await query.answer()
+    hours = int(query.data.split("_")[1].rstrip("h"))
+    context.user_data["ask_hours"] = hours
+    await context.bot.send_message(
+        chat_id=query.message.chat_id,
+        text="💬 Напиши свой вопрос:",
+    )
+
+
+async def handle_question(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
+    """Handle free-text question after user clicked 'Задать вопрос'."""
+    if "ask_hours" not in context.user_data:
+        return
+
+    user_id = update.effective_user.id
+    if not await database.is_allowed_user(user_id):
+        return
+
+    hours = context.user_data.pop("ask_hours")
+    question = update.message.text
+    since_ts = int(time.time()) - hours * 3600
+
+    thinking = await update.message.reply_text("🔍 Ищу ответ...")
+    posts = await database.get_posts_since(since_ts)
+    result = await summarizer.answer_question(posts, question)
+    html_result = _md_to_html(result)
+
+    ask_again = InlineKeyboardMarkup([[
+        InlineKeyboardButton("💬 Ещё вопрос", callback_data=f"ask_{hours}h")
+    ]])
+
+    await thinking.delete()
+    if len(html_result) <= 4096:
+        await update.message.reply_text(html_result, parse_mode="HTML", reply_markup=ask_again)
+    else:
+        chunks = _split_text(html_result)
+        for i, chunk in enumerate(chunks, 1):
+            is_last = i == len(chunks)
+            await update.message.reply_text(
+                chunk, parse_mode="HTML",
+                reply_markup=ask_again if is_last else None,
+            )
 
 
 # ---------------------------------------------------------------------------
@@ -438,8 +498,12 @@ def main() -> None:
 
     # Callbacks
     app.add_handler(CallbackQueryHandler(cb_digest, pattern=r"^digest_(24h|7d)$"))
+    app.add_handler(CallbackQueryHandler(cb_ask_start, pattern=r"^ask_\d+h$"))
     app.add_handler(CallbackQueryHandler(cb_remove_channel, pattern=r"^rmch_(yes|no)_.+$"))
     app.add_handler(CallbackQueryHandler(cb_remove_posts, pattern=r"^rmposts_(yes|no)_.+$"))
+
+    # Free-text question handler
+    app.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, handle_question))
 
     app.run_polling(drop_pending_updates=True)
 
