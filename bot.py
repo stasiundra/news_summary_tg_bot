@@ -1,5 +1,7 @@
 import asyncio
+import html as html_lib
 import logging
+import re
 import time
 from datetime import datetime, timezone
 from functools import wraps
@@ -57,6 +59,20 @@ def owner_only(func):
 
 def _fmt_date(ts: int) -> str:
     return datetime.fromtimestamp(ts, tz=timezone.utc).strftime("%d.%m.%Y")
+
+
+def _md_to_html(text: str) -> str:
+    """Convert basic Markdown to Telegram HTML."""
+    text = html_lib.escape(text)
+    # Links: [text](url) → <a href="url">text</a>
+    text = re.sub(r'\[([^\]]+)\]\((https?://[^)]+)\)', r'<a href="\2">\1</a>', text)
+    # Bold: **text** → <b>text</b>
+    text = re.sub(r'\*\*(.+?)\*\*', r'<b>\1</b>', text)
+    # Italic: *text* → <i>text</i>
+    text = re.sub(r'\*(.+?)\*', r'<i>\1</i>', text)
+    # Strip heading markers, keep text
+    text = re.sub(r'^#{1,6} ', '', text, flags=re.MULTILINE)
+    return text
 
 
 def _split_text(text: str, chunk_size: int = 4000) -> list[str]:
@@ -156,17 +172,19 @@ async def _handle_digest_callback(update: Update, context: ContextTypes.DEFAULT_
     since_ts = int(time.time()) - hours * 3600
     posts = await database.get_posts_since(since_ts)
     result = await summarizer.generate_digest(posts, label)
+    html_result = _md_to_html(result)
 
-    if len(result) <= 4096:
-        await query.edit_message_text(result)
+    if len(html_result) <= 4096:
+        await query.edit_message_text(html_result, parse_mode="HTML")
     else:
         await query.edit_message_text("📨 Отправляю частями...")
-        chunks = _split_text(result)
+        chunks = _split_text(html_result)
         total = len(chunks)
         for i, chunk in enumerate(chunks, 1):
             await context.bot.send_message(
                 chat_id=query.message.chat_id,
                 text=f"[{i}/{total}]\n{chunk}",
+                parse_mode="HTML",
             )
 
 
