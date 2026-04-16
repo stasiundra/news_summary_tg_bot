@@ -19,13 +19,12 @@
     (function() {
       var raw = {{ digest | tojson }};
       var out = document.getElementById("digest-out");
-      // Simple markdown renderer without CDN
       var html = raw
         .replace(/&/g,"&amp;").replace(/</g,"&lt;").replace(/>/g,"&gt;")
+        .replace(/\[([^\]]+)\]\((https?:\/\/[^)]+)\)/g, '<a href="$2" target="_blank">$1</a>')
         .replace(/^#{3} (.+)$/gm, "<h3>$1</h3>")
         .replace(/^#{2} (.+)$/gm, "<h2>$1</h2>")
         .replace(/^# (.+)$/gm,   "<h1>$1</h1>")
-        .replace(/\[([^\]]+)\]\((https?:\/\/[^)]+)\)/g, '<a href="$2" target="_blank">$1</a>')
         .replace(/\*\*(.+?)\*\*/g, "<strong>$1</strong>")
         .replace(/\*(.+?)\*/g,     "<em>$1</em>")
         .replace(/^[-*] (.+)$/gm,  "<li>$1</li>")
@@ -36,6 +35,47 @@
     })();
   </script>
 </div>
+
+<div class="card">
+  <h2>💬 Спросить подробнее</h2>
+  <form method="post" action="/ask">
+    <input type="hidden" name="period" value="{{ period }}">
+    <textarea name="digest_text" style="display:none">{{ digest | e }}</textarea>
+    <div class="form-row">
+      <input type="text" name="question" placeholder="Расскажи подробнее о..."
+             value="{{ question or '' }}" required>
+      <button class="btn btn-primary" type="submit">Спросить</button>
+    </div>
+  </form>
+</div>
+
+{% if answer %}
+<div class="card" style="border-left: 3px solid #4f6ef7;">
+  <h2 style="color:#4f6ef7">{{ question }}</h2>
+  <div id="answer-out"></div>
+  <script>
+    (function() {
+      var raw = {{ answer | tojson }};
+      var out = document.getElementById("answer-out");
+      var html = raw
+        .replace(/&/g,"&amp;").replace(/</g,"&lt;").replace(/>/g,"&gt;")
+        .replace(/\[([^\]]+)\]\((https?:\/\/[^)]+)\)/g, '<a href="$2" target="_blank">$1</a>')
+        .replace(/^#{3} (.+)$/gm, "<h3>$1</h3>")
+        .replace(/^#{2} (.+)$/gm, "<h2>$1</h2>")
+        .replace(/^# (.+)$/gm,   "<h1>$1</h1>")
+        .replace(/\*\*(.+?)\*\*/g, "<strong>$1</strong>")
+        .replace(/\*(.+?)\*/g,     "<em>$1</em>")
+        .replace(/^[-*] (.+)$/gm,  "<li>$1</li>")
+        .replace(/(<li>.*<\/li>\n?)+/g, function(m){ return "<ul>"+m+"</ul>"; })
+        .replace(/\n{2,}/g, "</p><p>")
+        .replace(/\n/g, "<br>");
+      out.innerHTML = "<p>" + html + "</p>";
+      out.scrollIntoView({ behavior: "smooth", block: "start" });
+    })();
+  </script>
+</div>
+{% endif %}
+
 {% endif %}
 
 {% endblock %}

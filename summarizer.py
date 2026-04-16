@@ -64,3 +64,46 @@ async def generate_digest(posts: list[dict], period_label: str) -> str:
     except Exception as e:
         logger.error("Claude API error: %s", e)
         return f"❌ Ошибка при генерации дайджеста: {e}"
+
+
+async def answer_question(posts: list[dict], question: str) -> str:
+    if not posts:
+        return "📭 Постов за этот период нет."
+
+    sorted_posts = sorted(posts, key=lambda p: p["timestamp"], reverse=True)
+    selected = sorted_posts[:DIGEST_MAX_POSTS]
+
+    by_channel: dict[str, list[str]] = defaultdict(list)
+    for post in selected:
+        text = (post["text"] or "").strip()
+        if len(text) > POST_MAX_CHARS:
+            text = text[:POST_MAX_CHARS] + "…"
+        url = f"https://t.me/{post['channel_username']}/{post['message_id']}"
+        by_channel[post["channel_username"]].append(f"[{url}]\n{text}")
+
+    blocks = [
+        f"=== @{ch} ===\n" + "\n---\n".join(entries)
+        for ch, entries in by_channel.items()
+    ]
+    posts_text = "\n\n".join(blocks)
+
+    system_prompt = (
+        "Ты — ассистент для анализа новостей из Telegram-каналов.\n"
+        "Отвечай только на русском языке. Отвечай конкретно на заданный вопрос, "
+        "опираясь только на предоставленные посты. Добавляй ссылки на источники в формате [источник](url)."
+    )
+
+    user_prompt = f"Вопрос: {question}\n\nПОСТЫ:\n{posts_text}"
+
+    try:
+        message = await asyncio.to_thread(
+            _client.messages.create,
+            model="claude-sonnet-4-6",
+            max_tokens=1000,
+            system=system_prompt,
+            messages=[{"role": "user", "content": user_prompt}],
+        )
+        return message.content[0].text
+    except Exception as e:
+        logger.error("Claude API error: %s", e)
+        return f"❌ Ошибка: {e}"

@@ -48,6 +48,26 @@ async def digest_generate(request: Request, period: str = Form(...)):
     })
 
 
+@app.post("/ask", response_class=HTMLResponse)
+async def ask_question(
+    request: Request,
+    question: str = Form(...),
+    period: str = Form(...),
+    digest_text: str = Form(""),
+):
+    hours = 24 if period == "24h" else 168
+    since_ts = int(time.time()) - hours * 3600
+    posts = await database.get_posts_since(since_ts)
+    answer = await summarizer.answer_question(posts, question)
+    return templates.TemplateResponse("digest.html", {
+        "request": request,
+        "digest": digest_text,
+        "period": period,
+        "question": question,
+        "answer": answer,
+    })
+
+
 # ---------------------------------------------------------------------------
 # Channels
 # ---------------------------------------------------------------------------
