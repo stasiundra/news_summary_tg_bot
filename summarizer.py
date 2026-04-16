@@ -55,8 +55,8 @@ async def generate_digest(posts: list[dict], period_label: str) -> str:
     try:
         message = await asyncio.to_thread(
             _client.messages.create,
-            model="claude-opus-4-5",
-            max_tokens=4000,
+            model="claude-sonnet-4-6",
+            max_tokens=2000,
             system=system_prompt,
             messages=[{"role": "user", "content": user_prompt}],
         )

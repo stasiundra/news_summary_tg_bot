@@ -13,5 +13,5 @@ DB_PATH: str = "digest.db"
 SESSION_NAME: str = "user_session"
 COLLECT_INTERVAL_HOURS: int = 6
 MAX_POSTS_PER_CHANNEL: int = 50
-POST_MAX_CHARS: int = 800
-DIGEST_MAX_POSTS: int = 200
+POST_MAX_CHARS: int = 400
+DIGEST_MAX_POSTS: int = 75
