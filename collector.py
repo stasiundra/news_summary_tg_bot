@@ -13,10 +13,10 @@ from database import get_active_channels, save_post, cleanup_old_posts
 
 logger = logging.getLogger(__name__)
 
-client = TelegramClient(SESSION_NAME, TG_API_ID, TG_API_HASH)
-
 # True when Telethon credentials are not configured — use web scraping instead
 _USE_WEB = TG_API_ID == 0
+
+client = TelegramClient(SESSION_NAME, TG_API_ID, TG_API_HASH) if not _USE_WEB else None
 
 
 # ---------------------------------------------------------------------------
