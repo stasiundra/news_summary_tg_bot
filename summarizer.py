@@ -56,8 +56,8 @@ async def generate_digest(posts: list[dict], period_label: str) -> str:
     try:
         message = await asyncio.to_thread(
             _client.messages.create,
-            model="claude-sonnet-4-6",
-            max_tokens=2000,
+            model="claude-haiku-4-5-20251001",
+            max_tokens=4000,
             system=system_prompt,
             messages=[{"role": "user", "content": user_prompt}],
         )
@@ -114,7 +114,7 @@ async def answer_question(posts: list[dict], question: str) -> str:
     try:
         message = await asyncio.to_thread(
             _client.messages.create,
-            model="claude-sonnet-4-6",
+            model="claude-haiku-4-5-20251001",
             max_tokens=1000,
             system=system_prompt,
             messages=[{"role": "user", "content": user_prompt}],
