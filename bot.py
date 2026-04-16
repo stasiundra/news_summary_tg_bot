@@ -16,7 +16,7 @@ from telegram.ext import (
 import collector
 import database
 import summarizer
-from config import BOT_TOKEN, COLLECT_INTERVAL_HOURS, OWNER_ID
+from config import BOT_TOKEN, COLLECT_INTERVAL_HOURS, OWNER_ID, TG_API_ID
 
 logging.basicConfig(
     format="%(asctime)s [%(levelname)s] %(name)s: %(message)s",
@@ -365,7 +365,9 @@ async def cmd_users(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
 
 async def post_init(application: Application) -> None:
     await database.init_db()
-    await collector.client.start()
+
+    if TG_API_ID:
+        await collector.client.start()
 
     scheduler = AsyncIOScheduler()
     scheduler.add_job(
@@ -385,7 +387,8 @@ async def post_shutdown(application: Application) -> None:
     scheduler: AsyncIOScheduler = application.bot_data.get("scheduler")
     if scheduler and scheduler.running:
         scheduler.shutdown(wait=False)
-    await collector.client.disconnect()
+    if TG_API_ID:
+        await collector.client.disconnect()
 
 
 # ---------------------------------------------------------------------------
