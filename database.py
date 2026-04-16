@@ -149,7 +149,7 @@ async def get_posts_since(since_ts: int) -> list[dict]:
     async with aiosqlite.connect(DB_PATH) as db:
         db.row_factory = aiosqlite.Row
         cursor = await db.execute(
-            "SELECT channel_username, text, timestamp FROM posts WHERE timestamp >= ? ORDER BY timestamp DESC",
+            "SELECT channel_username, message_id, text, timestamp FROM posts WHERE timestamp >= ? ORDER BY timestamp DESC",
             (since_ts,),
         )
         rows = await cursor.fetchall()
