@@ -1,6 +1,8 @@
 import asyncio
 import logging
+import re
 from collections import defaultdict
+from typing import AsyncGenerator
 
 import anthropic
 from duckduckgo_search import DDGS
@@ -9,70 +11,33 @@ from config import ANTHROPIC_API_KEY, POST_MAX_CHARS, DIGEST_MAX_POSTS
 
 logger = logging.getLogger(__name__)
 
-_client = anthropic.Anthropic(api_key=ANTHROPIC_API_KEY)
+# Async client — no asyncio.to_thread needed
+_client = anthropic.AsyncAnthropic(api_key=ANTHROPIC_API_KEY)
+
+MODEL = "claude-haiku-4-5-20251001"
 
 
-async def generate_digest(posts: list[dict], period_label: str) -> str:
-    if not posts:
-        return "📭 Постов за этот период нет"
+# ---------------------------------------------------------------------------
+# Helpers
+# ---------------------------------------------------------------------------
 
-    # Предпочитаем свежие посты — сортируем по убыванию и берём первые DIGEST_MAX_POSTS
-    sorted_posts = sorted(posts, key=lambda p: p["timestamp"], reverse=True)
-    selected = sorted_posts[:DIGEST_MAX_POSTS]
-
-    # Группируем по каналу, сохраняем URL каждого поста
-    by_channel: dict[str, list[str]] = defaultdict(list)
-    for post in selected:
+def _deduplicate_posts(posts: list[dict]) -> list[dict]:
+    """Remove near-duplicate posts (same first 80 chars after normalisation)."""
+    seen: set[str] = set()
+    unique: list[dict] = []
+    for post in posts:
         text = (post["text"] or "").strip()
-        if len(text) > POST_MAX_CHARS:
-            text = text[:POST_MAX_CHARS] + "…"
-        url = f"https://t.me/{post['channel_username']}/{post['message_id']}"
-        by_channel[post["channel_username"]].append(f"[{url}]\n{text}")
-
-    # Собираем текст для промпта
-    blocks: list[str] = []
-    for channel, entries in by_channel.items():
-        block = f"=== @{channel} ===\n" + "\n---\n".join(entries)
-        blocks.append(block)
-    posts_text = "\n\n".join(blocks)
-
-    system_prompt = (
-        "Ты — ассистент для создания дайджестов Telegram-каналов.\n"
-        "Отвечай только на русском языке. Будь кратким и конкретным."
-    )
-
-    user_prompt = (
-        f"Создай структурированный дайджест постов за {period_label}.\n\n"
-        f"1. Начни с блока \"🔥 Главное за {period_label}\": топ-5 важнейших событий,\n"
-        "   каждое — одно предложение + ссылка на пост в формате [источник](url)\n\n"
-        "2. Затем рубрики по содержанию\n"
-        "   (примеры: 🤖 AI, 💰 Финансы, 🌍 Политика, 📱 Технологии, 💼 Бизнес, 🔬 Наука)\n"
-        "   По каждой рубрике: 2-4 предложения саммари + ключевые факты списком со ссылками\n\n"
-        "Каждый пост в данных снабжён ссылкой в формате [https://t.me/...] перед текстом — "
-        "используй эти ссылки при упоминании конкретных фактов и событий.\n\n"
-        f"ПОСТЫ:\n{posts_text}"
-    )
-
-    try:
-        message = await asyncio.to_thread(
-            _client.messages.create,
-            model="claude-haiku-4-5-20251001",
-            max_tokens=4000,
-            system=system_prompt,
-            messages=[{"role": "user", "content": user_prompt}],
-        )
-        return message.content[0].text
-    except Exception as e:
-        logger.error("Claude API error: %s", e)
-        return f"❌ Ошибка при генерации дайджеста: {e}"
+        fingerprint = re.sub(r"\s+", " ", text.lower())[:80]
+        if fingerprint not in seen:
+            seen.add(fingerprint)
+            unique.append(post)
+    return unique
 
 
-async def answer_question(posts: list[dict], question: str) -> str:
-    if not posts:
-        return "📭 Постов за этот период нет."
-
+def _build_posts_text(posts: list[dict]) -> str:
+    """Sort, deduplicate, truncate and format posts into a prompt block."""
     sorted_posts = sorted(posts, key=lambda p: p["timestamp"], reverse=True)
-    selected = sorted_posts[:DIGEST_MAX_POSTS]
+    selected = _deduplicate_posts(sorted_posts[:DIGEST_MAX_POSTS])
 
     by_channel: dict[str, list[str]] = defaultdict(list)
     for post in selected:
@@ -86,7 +51,85 @@ async def answer_question(posts: list[dict], question: str) -> str:
         f"=== @{ch} ===\n" + "\n---\n".join(entries)
         for ch, entries in by_channel.items()
     ]
-    posts_text = "\n\n".join(blocks)
+    return "\n\n".join(blocks)
+
+
+# ---------------------------------------------------------------------------
+# Digest — streaming variant (for Telegram bot)
+# ---------------------------------------------------------------------------
+
+async def generate_digest_stream(
+    posts: list[dict], period_label: str
+) -> AsyncGenerator[str, None]:
+    """Yield text chunks from Claude as they arrive."""
+    if not posts:
+        yield "📭 Постов за этот период нет"
+        return
+
+    posts_text = _build_posts_text(posts)
+
+    system_prompt = (
+        "Ты — ассистент для создания дайджестов Telegram-каналов.\n"
+        "Отвечай только на русском языке. Будь кратким и конкретным."
+    )
+    user_prompt = (
+        f"Создай структурированный дайджест постов за {period_label}.\n\n"
+        f"1. Начни с блока \"🔥 Главное за {period_label}\": топ-5 важнейших событий,\n"
+        "   каждое — одно предложение + ссылка на пост в формате [источник](url)\n\n"
+        "2. Затем рубрики по содержанию\n"
+        "   (примеры: 🤖 AI, 💰 Финансы, 🌍 Политика, 📱 Технологии, 💼 Бизнес, 🔬 Наука)\n"
+        "   По каждой рубрике: 2-4 предложения саммари + ключевые факты списком со ссылками\n\n"
+        "Каждый пост в данных снабжён ссылкой в формате [https://t.me/...] перед текстом — "
+        "используй эти ссылки при упоминании конкретных фактов и событий.\n\n"
+        f"ПОСТЫ:\n{posts_text}"
+    )
+
+    try:
+        async with _client.messages.stream(
+            model=MODEL,
+            max_tokens=4000,
+            system=[{
+                "type": "text",
+                "text": system_prompt,
+                "cache_control": {"type": "ephemeral"},
+            }],
+            messages=[{"role": "user", "content": user_prompt}],
+        ) as stream:
+            async for text in stream.text_stream:
+                yield text
+    except Exception as e:
+        logger.error("Claude API streaming error: %s", e)
+        yield f"❌ Ошибка при генерации дайджеста: {e}"
+
+
+# ---------------------------------------------------------------------------
+# Digest — non-streaming variant (for web interface)
+# ---------------------------------------------------------------------------
+
+async def generate_digest(posts: list[dict], period_label: str) -> str:
+    """Collect full digest text (used by web.py)."""
+    if not posts:
+        return "📭 Постов за этот период нет"
+
+    chunks: list[str] = []
+    async for chunk in generate_digest_stream(posts, period_label):
+        chunks.append(chunk)
+    return "".join(chunks)
+
+
+# ---------------------------------------------------------------------------
+# Question answering — streaming variant (for Telegram bot)
+# ---------------------------------------------------------------------------
+
+async def answer_question_stream(
+    posts: list[dict], question: str
+) -> AsyncGenerator[str, None]:
+    """Yield answer chunks from Claude as they arrive."""
+    if not posts:
+        yield "📭 Постов за этот период нет."
+        return
+
+    posts_text = _build_posts_text(posts)
 
     system_prompt = (
         "Ты — умный ассистент. Отвечай только на русском языке. "
@@ -97,7 +140,7 @@ async def answer_question(posts: list[dict], question: str) -> str:
         "Чётко разделяй: что из постов, что из своих знаний, что из поиска."
     )
 
-    # Веб-поиск для свежей информации
+    # Web search runs concurrently while we prepare the prompt
     search_text = ""
     try:
         results = await asyncio.to_thread(
@@ -109,17 +152,35 @@ async def answer_question(posts: list[dict], question: str) -> str:
     except Exception as e:
         logger.warning("Web search failed: %s", e)
 
-    user_prompt = f"Вопрос: {question}\n\nПОСТЫ ИЗ КАНАЛОВ:\n{posts_text}{search_text}"
+    user_prompt = (
+        f"Вопрос: {question}\n\nПОСТЫ ИЗ КАНАЛОВ:\n{posts_text}{search_text}"
+    )
 
     try:
-        message = await asyncio.to_thread(
-            _client.messages.create,
-            model="claude-haiku-4-5-20251001",
+        async with _client.messages.stream(
+            model=MODEL,
             max_tokens=1000,
-            system=system_prompt,
+            system=[{
+                "type": "text",
+                "text": system_prompt,
+                "cache_control": {"type": "ephemeral"},
+            }],
             messages=[{"role": "user", "content": user_prompt}],
-        )
-        return message.content[0].text
+        ) as stream:
+            async for text in stream.text_stream:
+                yield text
     except Exception as e:
-        logger.error("Claude API error: %s", e)
-        return f"❌ Ошибка: {e}"
+        logger.error("Claude API streaming error: %s", e)
+        yield f"❌ Ошибка: {e}"
+
+
+# ---------------------------------------------------------------------------
+# Question answering — non-streaming variant (for web interface)
+# ---------------------------------------------------------------------------
+
+async def answer_question(posts: list[dict], question: str) -> str:
+    """Collect full answer text (used by web.py)."""
+    chunks: list[str] = []
+    async for chunk in answer_question_stream(posts, question):
+        chunks.append(chunk)
+    return "".join(chunks)

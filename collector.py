@@ -158,33 +158,40 @@ async def collect_posts(hours_back: int = 25) -> int:
     since_ts = int(time.time()) - hours_back * 3600
     saved_total = 0
 
-    for channel in channels:
-        username = channel["username"]
-
-        if _USE_WEB:
-            saved_total += await _collect_channel_web(username, since_ts)
-            continue
-
-        try:
-            saved_count = 0
-            async for message in client.iter_messages(username, limit=MAX_POSTS_PER_CHANNEL):
-                if message.date.timestamp() < since_ts:
-                    break
-                text = message.text or message.caption or ""
-                if len(text) < 20:
-                    continue
-                await save_post(
-                    channel_username=username,
-                    message_id=message.id,
-                    text=text,
-                    timestamp=int(message.date.timestamp()),
-                )
-                saved_count += 1
-            saved_total += saved_count
-        except FloodWaitError as e:
-            logger.error("FloodWaitError collecting %s: wait %s sec", username, e.seconds)
-        except Exception as e:
-            logger.error("Error collecting posts from %s: %s", username, e)
+    if _USE_WEB:
+        # Collect all channels in parallel
+        results = await asyncio.gather(
+            *[_collect_channel_web(ch["username"], since_ts) for ch in channels],
+            return_exceptions=True,
+        )
+        for ch, result in zip(channels, results):
+            if isinstance(result, int):
+                saved_total += result
+            else:
+                logger.error("Error collecting %s: %s", ch["username"], result)
+    else:
+        for channel in channels:
+            username = channel["username"]
+            try:
+                saved_count = 0
+                async for message in client.iter_messages(username, limit=MAX_POSTS_PER_CHANNEL):
+                    if message.date.timestamp() < since_ts:
+                        break
+                    text = message.text or message.caption or ""
+                    if len(text) < 20:
+                        continue
+                    await save_post(
+                        channel_username=username,
+                        message_id=message.id,
+                        text=text,
+                        timestamp=int(message.date.timestamp()),
+                    )
+                    saved_count += 1
+                saved_total += saved_count
+            except FloodWaitError as e:
+                logger.error("FloodWaitError collecting %s: wait %s sec", username, e.seconds)
+            except Exception as e:
+                logger.error("Error collecting posts from %s: %s", username, e)
 
     await cleanup_old_posts()
     return saved_total

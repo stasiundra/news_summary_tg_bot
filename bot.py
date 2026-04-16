@@ -179,21 +179,41 @@ async def cmd_status(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None
 async def _handle_digest_callback(update: Update, context: ContextTypes.DEFAULT_TYPE, hours: int, label: str) -> None:
     query = update.callback_query
     await query.answer()
-    await query.edit_message_text(f"⏳ Генерирую дайджест за {label}...")
+    msg = await query.edit_message_text(f"⏳ Генерирую дайджест за {label}…")
 
     since_ts = int(time.time()) - hours * 3600
     posts = await database.get_posts_since(since_ts)
-    result = await summarizer.generate_digest(posts, label)
-    html_result = _md_to_html(result)
 
+    # Stream from Claude, show live word-count progress
+    full_text = ""
+    last_edit = time.time()
+    try:
+        async for chunk in summarizer.generate_digest_stream(posts, label):
+            full_text += chunk
+            now = time.time()
+            if now - last_edit >= 3.0:
+                word_count = len(full_text.split())
+                try:
+                    await msg.edit_text(
+                        f"✍️ Генерирую дайджест за {label}… ({word_count} слов)"
+                    )
+                    last_edit = now
+                except Exception:
+                    pass
+    except Exception as e:
+        logger.error("Streaming error in digest: %s", e)
+        if not full_text:
+            full_text = f"❌ Ошибка при генерации дайджеста: {e}"
+
+    html_result = _md_to_html(full_text)
     ask_keyboard = InlineKeyboardMarkup([[
         InlineKeyboardButton("💬 Задать вопрос", callback_data=f"ask_{hours}h")
     ]])
 
     if len(html_result) <= 4096:
-        await query.edit_message_text(html_result, parse_mode="HTML", reply_markup=ask_keyboard)
+        await msg.edit_text(html_result, parse_mode="HTML", reply_markup=ask_keyboard)
     else:
-        await query.edit_message_text("📨 Отправляю частями...")
+        await msg.edit_text("📨 Отправляю частями…")
         chunks = _split_text(html_result)
         total = len(chunks)
         for i, chunk in enumerate(chunks, 1):
@@ -249,11 +269,29 @@ async def handle_question(update: Update, context: ContextTypes.DEFAULT_TYPE) ->
     question = update.message.text
     since_ts = int(time.time()) - hours * 3600
 
-    thinking = await update.message.reply_text("🔍 Ищу ответ...")
+    thinking = await update.message.reply_text("🔍 Ищу ответ…")
     posts = await database.get_posts_since(since_ts)
-    result = await summarizer.answer_question(posts, question)
-    html_result = _md_to_html(result)
 
+    # Stream from Claude with live progress
+    full_text = ""
+    last_edit = time.time()
+    try:
+        async for chunk in summarizer.answer_question_stream(posts, question):
+            full_text += chunk
+            now = time.time()
+            if now - last_edit >= 3.0:
+                word_count = len(full_text.split())
+                try:
+                    await thinking.edit_text(f"🔍 Ищу ответ… ({word_count} слов)")
+                    last_edit = now
+                except Exception:
+                    pass
+    except Exception as e:
+        logger.error("Streaming error in answer: %s", e)
+        if not full_text:
+            full_text = f"❌ Ошибка: {e}"
+
+    html_result = _md_to_html(full_text)
     ask_again = InlineKeyboardMarkup([[
         InlineKeyboardButton("💬 Ещё вопрос", callback_data=f"ask_{hours}h")
     ]])
