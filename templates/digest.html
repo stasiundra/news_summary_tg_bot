@@ -1,0 +1,33 @@
+{% extends "base.html" %}
+{% block content %}
+<div class="row justify-content-center">
+  <div class="col-lg-9">
+    <div class="card mb-4">
+      <div class="card-body">
+        <h5 class="card-title mb-3">Сгенерировать дайджест</h5>
+        <form method="post" action="/digest">
+          <div class="d-flex gap-2">
+            <button type="submit" name="period" value="24h" class="btn btn-primary">📅 За сутки</button>
+            <button type="submit" name="period" value="7d" class="btn btn-outline-primary">📆 За неделю</button>
+          </div>
+        </form>
+      </div>
+    </div>
+
+    {% if digest %}
+    <div class="card">
+      <div class="card-body">
+        <h6 class="text-muted mb-3">
+          Дайджест за {{ "сутки" if period == "24h" else "неделю" }}
+        </h6>
+        <div id="digest-output" class="digest-output"></div>
+        <script>
+          document.getElementById("digest-output").innerHTML =
+            marked.parse({{ digest | tojson }});
+        </script>
+      </div>
+    </div>
+    {% endif %}
+  </div>
+</div>
+{% endblock %}
