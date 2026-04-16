@@ -3,6 +3,7 @@ import logging
 from collections import defaultdict
 
 import anthropic
+from duckduckgo_search import DDGS
 
 from config import ANTHROPIC_API_KEY, POST_MAX_CHARS, DIGEST_MAX_POSTS
 
@@ -88,12 +89,27 @@ async def answer_question(posts: list[dict], question: str) -> str:
     posts_text = "\n\n".join(blocks)
 
     system_prompt = (
-        "Ты — ассистент для анализа новостей из Telegram-каналов.\n"
-        "Отвечай только на русском языке. Отвечай конкретно на заданный вопрос, "
-        "опираясь только на предоставленные посты. Добавляй ссылки на источники в формате [источник](url)."
+        "Ты — умный ассистент. Отвечай только на русском языке. "
+        "Отвечай развёрнуто и по существу, используя:\n"
+        "1. Посты из Telegram-каналов (приведены ниже) — ссылайся на них как [источник](url)\n"
+        "2. Свои собственные знания — если вопрос выходит за рамки постов, отвечай из общих знаний\n"
+        "3. Результаты веб-поиска (если приведены) — для актуальной информации\n"
+        "Чётко разделяй: что из постов, что из своих знаний, что из поиска."
     )
 
-    user_prompt = f"Вопрос: {question}\n\nПОСТЫ:\n{posts_text}"
+    # Веб-поиск для свежей информации
+    search_text = ""
+    try:
+        results = await asyncio.to_thread(
+            lambda: list(DDGS().text(question, max_results=5))
+        )
+        if results:
+            snippets = [f"- {r['title']}: {r['body']}" for r in results]
+            search_text = "\n\nРЕЗУЛЬТАТЫ ВЕБ-ПОИСКА:\n" + "\n".join(snippets)
+    except Exception as e:
+        logger.warning("Web search failed: %s", e)
+
+    user_prompt = f"Вопрос: {question}\n\nПОСТЫ ИЗ КАНАЛОВ:\n{posts_text}{search_text}"
 
     try:
         message = await asyncio.to_thread(
