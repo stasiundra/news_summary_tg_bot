@@ -13,6 +13,11 @@ app = FastAPI()
 templates = Jinja2Templates(directory="templates")
 
 
+@app.on_event("startup")
+async def startup():
+    await database.init_db()
+
+
 def fmt_date(ts: int) -> str:
     return datetime.fromtimestamp(ts, tz=timezone.utc).strftime("%d.%m.%Y")
 

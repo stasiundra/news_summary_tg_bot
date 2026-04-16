@@ -1,33 +1,40 @@
 {% extends "base.html" %}
 {% block content %}
-<div class="row justify-content-center">
-  <div class="col-lg-9">
-    <div class="card mb-4">
-      <div class="card-body">
-        <h5 class="card-title mb-3">Сгенерировать дайджест</h5>
-        <form method="post" action="/digest">
-          <div class="d-flex gap-2">
-            <button type="submit" name="period" value="24h" class="btn btn-primary">📅 За сутки</button>
-            <button type="submit" name="period" value="7d" class="btn btn-outline-primary">📆 За неделю</button>
-          </div>
-        </form>
-      </div>
-    </div>
 
-    {% if digest %}
-    <div class="card">
-      <div class="card-body">
-        <h6 class="text-muted mb-3">
-          Дайджест за {{ "сутки" if period == "24h" else "неделю" }}
-        </h6>
-        <div id="digest-output" class="digest-output"></div>
-        <script>
-          document.getElementById("digest-output").innerHTML =
-            marked.parse({{ digest | tojson }});
-        </script>
-      </div>
+<div class="card">
+  <h2>Сгенерировать дайджест</h2>
+  <form method="post" action="/digest">
+    <div class="form-row">
+      <button class="btn btn-primary" type="submit" name="period" value="24h">📅 За сутки</button>
+      <button class="btn btn-outline" type="submit" name="period" value="7d">📆 За неделю</button>
     </div>
-    {% endif %}
-  </div>
+  </form>
 </div>
+
+{% if digest %}
+<div class="card">
+  <h2>Дайджест за {{ "сутки" if period == "24h" else "неделю" }}</h2>
+  <div id="digest-out"></div>
+  <script>
+    (function() {
+      var raw = {{ digest | tojson }};
+      var out = document.getElementById("digest-out");
+      // Simple markdown renderer without CDN
+      var html = raw
+        .replace(/&/g,"&amp;").replace(/</g,"&lt;").replace(/>/g,"&gt;")
+        .replace(/^#{3} (.+)$/gm, "<h3>$1</h3>")
+        .replace(/^#{2} (.+)$/gm, "<h2>$1</h2>")
+        .replace(/^# (.+)$/gm,   "<h1>$1</h1>")
+        .replace(/\*\*(.+?)\*\*/g, "<strong>$1</strong>")
+        .replace(/\*(.+?)\*/g,     "<em>$1</em>")
+        .replace(/^[-*] (.+)$/gm,  "<li>$1</li>")
+        .replace(/(<li>.*<\/li>\n?)+/g, function(m){ return "<ul>"+m+"</ul>"; })
+        .replace(/\n{2,}/g, "</p><p>")
+        .replace(/\n/g, "<br>");
+      out.innerHTML = "<p>" + html + "</p>";
+    })();
+  </script>
+</div>
+{% endif %}
+
 {% endblock %}
