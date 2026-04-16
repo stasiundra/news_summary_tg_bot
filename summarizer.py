@@ -1,3 +1,4 @@
+import asyncio
 import logging
 from collections import defaultdict
 
@@ -48,7 +49,8 @@ async def generate_digest(posts: list[dict], period_label: str) -> str:
     )
 
     try:
-        message = _client.messages.create(
+        message = await asyncio.to_thread(
+            _client.messages.create,
             model="claude-opus-4-5",
             max_tokens=4000,
             system=system_prompt,
