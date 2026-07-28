@@ -15,7 +15,7 @@
 - Python 3.11+, asyncio
 - [Telethon](https://github.com/LonamiWebs/Telethon) — чтение каналов от имени пользователя
 - [python-telegram-bot](https://github.com/python-telegram-bot/python-telegram-bot) — Bot API
-- [Claude API](https://anthropic.com) (claude-opus-4-5) — генерация дайджестов
+- [Claude API](https://anthropic.com) (claude-haiku-4-5, configurable via `CLAUDE_MODEL` env) — генерация дайджестов
 - SQLite + aiosqlite — хранение постов
 - APScheduler — периодический сбор
 

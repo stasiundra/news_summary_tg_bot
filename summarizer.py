@@ -7,14 +7,14 @@ from typing import AsyncGenerator
 import anthropic
 from duckduckgo_search import DDGS
 
-from config import ANTHROPIC_API_KEY, POST_MAX_CHARS, DIGEST_MAX_POSTS
+from config import ANTHROPIC_API_KEY, CLAUDE_MODEL, POST_MAX_CHARS, DIGEST_MAX_POSTS
 
 logger = logging.getLogger(__name__)
 
 # Async client — no asyncio.to_thread needed
 _client = anthropic.AsyncAnthropic(api_key=ANTHROPIC_API_KEY)
 
-MODEL = "claude-haiku-4-5-20251001"
+MODEL = CLAUDE_MODEL  # configurable via CLAUDE_MODEL env var (see config.py)
 
 
 # ---------------------------------------------------------------------------
