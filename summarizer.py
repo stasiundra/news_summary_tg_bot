@@ -101,12 +101,18 @@ async def generate_digest_stream(
             contents=user_prompt,
             config=types.GenerateContentConfig(
                 system_instruction=system_prompt,
-                max_output_tokens=4096,
+                max_output_tokens=8192,
             ),
         )
+        finish_reason = None
         async for chunk in response:
             if chunk.text:
                 yield chunk.text
+            if chunk.candidates:
+                finish_reason = chunk.candidates[0].finish_reason
+        if finish_reason and str(finish_reason) not in ("STOP", "FINISH_REASON_UNSPECIFIED"):
+            logger.warning("digest truncated: finish_reason=%s", finish_reason)
+            yield "\n\n⚠️ Дайджест обрезан по лимиту длины ответа."
     except Exception as e:
         logger.error("Gemini API streaming error: %s", e)
         yield f"❌ Ошибка при генерации дайджеста: {e}"
