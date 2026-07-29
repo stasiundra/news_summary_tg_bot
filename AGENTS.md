@@ -4,7 +4,7 @@
 
 Telegram-дайджест-бот для небольшой группы доверенных пользователей. Читает посты из
 Telegram-каналов от имени пользователя (через Telethon), хранит их в SQLite и по команде
-`/digest` генерирует структурированный дайджест с рубриками через Claude API.
+`/digest` генерирует структурированный дайджест с рубриками через Gemini API.
 
 **Репозиторий public.** Доступ — только для доверенных пользователей из whitelist (OWNER_ID).
 
@@ -13,7 +13,7 @@ Telegram-каналов от имени пользователя (через Tel
 - Python 3.11+, asyncio
 - [Telethon](https://github.com/LonamiWebs/Telethon) — чтение каналов от имени пользователя
 - [python-telegram-bot](https://github.com/python-telegram-bot/python-telegram-bot) — Bot API
-- [Claude API](https://anthropic.com) (anthropic SDK) — генерация дайджестов
+- [Gemini API](https://ai.google.dev) (google-genai SDK, free tier) — генерация дайджестов
 - SQLite + aiosqlite — хранение постов
 - APScheduler — периодический сбор (каждые 6 часов)
 - FastAPI + uvicorn + Jinja2 — веб-панель (`web.py`)
@@ -34,7 +34,7 @@ python web.py       # веб-панель дайджестов
 
 - `BOT_TOKEN` — токен бота от @BotFather
 - `TG_API_ID` / `TG_API_HASH` — API-ключи Telegram user-аккаунта (для Telethon)
-- `ANTHROPIC_API_KEY` — ключ Claude API
+- `GEMINI_API_KEY` — ключ Google Gemini API (free tier)
 - `OWNER_ID` — Telegram ID владельца (whitelist-гейт)
 
 ## Архитектура
@@ -43,9 +43,9 @@ python web.py       # веб-панель дайджестов
 |---|---|
 | `bot.py` | python-telegram-bot: команды `/digest`, `/ask`, управление каналами/пользователями, whitelist-гейт |
 | `collector.py` | Telethon: чтение каналов, APScheduler (сбор каждые `COLLECT_INTERVAL_HOURS`=6ч), параллельный сбор, streaming, caching, dedup |
-| `summarizer.py` | Claude API: генерация рубрикованного дайджеста (AI, Финансы, Политика и др.) за сутки/неделю |
+| `summarizer.py` | Gemini API: генерация рубрикованного дайджеста (AI, Финансы, Политика и др.) за сутки/неделю |
 | `database.py` | aiosqlite: хранение постов в `digest.db` |
-| `config.py` | Конфиг из `.env` (BOT_TOKEN, TG_API_ID/HASH, ANTHROPIC_API_KEY, OWNER_ID, интервал сбора, лимиты постов) |
+| `config.py` | Конфиг из `.env` (BOT_TOKEN, TG_API_ID/HASH, GEMINI_API_KEY, OWNER_ID, интервал сбора, лимиты постов) |
 | `web.py` | FastAPI веб-панель дайджестов |
 | `templates/` | Jinja2-шаблоны веб-панели |
 

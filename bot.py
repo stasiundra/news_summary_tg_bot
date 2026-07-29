@@ -184,7 +184,7 @@ async def _handle_digest_callback(update: Update, context: ContextTypes.DEFAULT_
     since_ts = int(time.time()) - hours * 3600
     posts = await database.get_posts_since(since_ts)
 
-    # Stream from Claude, show live word-count progress
+    # Stream from Gemini, show live word-count progress
     full_text = ""
     last_edit = time.time()
     try:
@@ -272,7 +272,7 @@ async def handle_question(update: Update, context: ContextTypes.DEFAULT_TYPE) ->
     thinking = await update.message.reply_text("🔍 Ищу ответ…")
     posts = await database.get_posts_since(since_ts)
 
-    # Stream from Claude with live progress
+    # Stream from Gemini with live progress
     full_text = ""
     last_edit = time.time()
     try:

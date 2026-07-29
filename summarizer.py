@@ -4,17 +4,17 @@ import re
 from collections import defaultdict
 from typing import AsyncGenerator
 
-import anthropic
+from google import genai
+from google.genai import types
 from duckduckgo_search import DDGS
 
-from config import ANTHROPIC_API_KEY, CLAUDE_MODEL, POST_MAX_CHARS, DIGEST_MAX_POSTS
+from config import GEMINI_API_KEY, GEMINI_MODEL, POST_MAX_CHARS, DIGEST_MAX_POSTS
 
 logger = logging.getLogger(__name__)
 
-# Async client — no asyncio.to_thread needed
-_client = anthropic.AsyncAnthropic(api_key=ANTHROPIC_API_KEY)
+_client = genai.Client(api_key=GEMINI_API_KEY)
 
-MODEL = CLAUDE_MODEL  # configurable via CLAUDE_MODEL env var (see config.py)
+MODEL = GEMINI_MODEL
 
 
 # ---------------------------------------------------------------------------
@@ -61,7 +61,7 @@ def _build_posts_text(posts: list[dict]) -> str:
 async def generate_digest_stream(
     posts: list[dict], period_label: str
 ) -> AsyncGenerator[str, None]:
-    """Yield text chunks from Claude as they arrive."""
+    """Yield text chunks from Gemini as they arrive."""
     if not posts:
         yield "📭 Постов за этот период нет"
         return
@@ -85,20 +85,19 @@ async def generate_digest_stream(
     )
 
     try:
-        async with _client.messages.stream(
+        response = await _client.aio.models.generate_content_stream(
             model=MODEL,
-            max_tokens=4000,
-            system=[{
-                "type": "text",
-                "text": system_prompt,
-                "cache_control": {"type": "ephemeral"},
-            }],
-            messages=[{"role": "user", "content": user_prompt}],
-        ) as stream:
-            async for text in stream.text_stream:
-                yield text
+            contents=user_prompt,
+            config=types.GenerateContentConfig(
+                system_instruction=system_prompt,
+                max_output_tokens=4096,
+            ),
+        )
+        async for chunk in response:
+            if chunk.text:
+                yield chunk.text
     except Exception as e:
-        logger.error("Claude API streaming error: %s", e)
+        logger.error("Gemini API streaming error: %s", e)
         yield f"❌ Ошибка при генерации дайджеста: {e}"
 
 
@@ -124,7 +123,7 @@ async def generate_digest(posts: list[dict], period_label: str) -> str:
 async def answer_question_stream(
     posts: list[dict], question: str
 ) -> AsyncGenerator[str, None]:
-    """Yield answer chunks from Claude as they arrive."""
+    """Yield answer chunks from Gemini as they arrive."""
     if not posts:
         yield "📭 Постов за этот период нет."
         return
@@ -157,20 +156,19 @@ async def answer_question_stream(
     )
 
     try:
-        async with _client.messages.stream(
+        response = await _client.aio.models.generate_content_stream(
             model=MODEL,
-            max_tokens=1000,
-            system=[{
-                "type": "text",
-                "text": system_prompt,
-                "cache_control": {"type": "ephemeral"},
-            }],
-            messages=[{"role": "user", "content": user_prompt}],
-        ) as stream:
-            async for text in stream.text_stream:
-                yield text
+            contents=user_prompt,
+            config=types.GenerateContentConfig(
+                system_instruction=system_prompt,
+                max_output_tokens=1024,
+            ),
+        )
+        async for chunk in response:
+            if chunk.text:
+                yield chunk.text
     except Exception as e:
-        logger.error("Claude API streaming error: %s", e)
+        logger.error("Gemini API streaming error: %s", e)
         yield f"❌ Ошибка: {e}"
 
 

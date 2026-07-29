@@ -1,6 +1,6 @@
 # Telegram Digest Bot
 
-Бот для небольшой группы доверенных пользователей. Читает посты из Telegram-каналов от имени пользователя (через Telethon), хранит их в SQLite и по команде `/digest` генерирует структурированный дайджест с рубриками через Claude API.
+Бот для небольшой группы доверенных пользователей. Читает посты из Telegram-каналов от имени пользователя (через Telethon), хранит их в SQLite и по команде `/digest` генерирует структурированный дайджест с рубриками через Gemini API.
 
 ## Возможности
 
@@ -15,7 +15,7 @@
 - Python 3.11+, asyncio
 - [Telethon](https://github.com/LonamiWebs/Telethon) — чтение каналов от имени пользователя
 - [python-telegram-bot](https://github.com/python-telegram-bot/python-telegram-bot) — Bot API
-- [Claude API](https://anthropic.com) (claude-haiku-4-5, configurable via `CLAUDE_MODEL` env) — генерация дайджестов
+- [Gemini API](https://ai.google.dev) (gemini-2.5-flash, configurable via `GEMINI_MODEL` env, free tier) — генерация дайджестов
 - SQLite + aiosqlite — хранение постов
 - APScheduler — периодический сбор
 
@@ -37,7 +37,7 @@ pip install -r requirements.txt
 BOT_TOKEN=        # токен бота от @BotFather
 TG_API_ID=        # с my.telegram.org
 TG_API_HASH=      # с my.telegram.org
-ANTHROPIC_API_KEY= # с console.anthropic.com
+GEMINI_API_KEY=     # с aistudio.google.com/apikey
 OWNER_ID=         # твой Telegram user_id
 ```
 
@@ -76,7 +76,7 @@ python bot.py
 ```
 ├── bot.py           # точка входа, команды и callback-хендлеры
 ├── collector.py     # Telethon: валидация каналов, сбор постов
-├── summarizer.py    # Claude API: генерация дайджеста
+├── summarizer.py    # Gemini API: генерация дайджеста
 ├── database.py      # работа с SQLite
 ├── config.py        # загрузка .env и константы
 └── requirements.txt
