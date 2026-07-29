@@ -12,7 +12,18 @@ from config import GEMINI_API_KEY, GEMINI_MODEL, POST_MAX_CHARS, DIGEST_MAX_POST
 
 logger = logging.getLogger(__name__)
 
-_client = genai.Client(api_key=GEMINI_API_KEY)
+_client: genai.Client | None = None
+
+
+def _get_client() -> genai.Client:
+    """Lazy-init Gemini client — allows bot to start without API key."""
+    global _client
+    if _client is None:
+        if not GEMINI_API_KEY:
+            raise RuntimeError("GEMINI_API_KEY not set — get one at https://aistudio.google.com/apikey")
+        _client = genai.Client(api_key=GEMINI_API_KEY)
+    return _client
+
 
 MODEL = GEMINI_MODEL
 
@@ -85,7 +96,7 @@ async def generate_digest_stream(
     )
 
     try:
-        response = await _client.aio.models.generate_content_stream(
+        response = await _get_client().aio.models.generate_content_stream(
             model=MODEL,
             contents=user_prompt,
             config=types.GenerateContentConfig(
@@ -156,7 +167,7 @@ async def answer_question_stream(
     )
 
     try:
-        response = await _client.aio.models.generate_content_stream(
+        response = await _get_client().aio.models.generate_content_stream(
             model=MODEL,
             contents=user_prompt,
             config=types.GenerateContentConfig(
