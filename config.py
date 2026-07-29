@@ -26,6 +26,7 @@ WEB_PORT: int = int(os.environ.get("WEB_PORT", "8080"))
 # Gemini model for digest generation and Q&A.
 # Free tier: 15 req/min, 1500 req/day.
 # Options:
-#   gemini-2.5-flash  — fastest, free tier, near-frontier (default)
-#   gemini-2.5-pro    — higher quality, free tier but lower rate limits
-GEMINI_MODEL: str = os.environ.get("GEMINI_MODEL", "gemini-2.5-flash")
+#   gemini-3.6-flash       — latest, fastest, free tier (default)
+#   gemini-flash-latest   — always points to newest flash model
+#   gemini-2.5-flash      — legacy, may be unavailable to new keys
+GEMINI_MODEL: str = os.environ.get("GEMINI_MODEL", "gemini-3.6-flash")
