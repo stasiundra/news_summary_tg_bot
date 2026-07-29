@@ -110,7 +110,10 @@ async def generate_digest_stream(
                 yield chunk.text
             if chunk.candidates:
                 finish_reason = chunk.candidates[0].finish_reason
-        if finish_reason and str(finish_reason) not in ("STOP", "FINISH_REASON_UNSPECIFIED"):
+        if finish_reason and getattr(finish_reason, "value", str(finish_reason)) not in (
+            "STOP",
+            "FINISH_REASON_UNSPECIFIED",
+        ):
             logger.warning("digest truncated: finish_reason=%s", finish_reason)
             yield "\n\n⚠️ Дайджест обрезан по лимиту длины ответа."
     except Exception as e:
