@@ -4,7 +4,7 @@ from datetime import datetime, timezone
 from pathlib import Path
 
 import uvicorn
-from fastapi import Depends, FastAPI, Form, Request, Response
+from fastapi import Depends, FastAPI, Form, HTTPException, Request, Response
 from fastapi.responses import HTMLResponse, RedirectResponse
 from fastapi.templating import Jinja2Templates
 from itsdangerous import BadSignature, URLSafeSerializer
@@ -49,8 +49,9 @@ async def require_auth(request: Request) -> None:
         raise _redirect_login()
 
 
-def _redirect_login() -> RedirectResponse:
-    return RedirectResponse(url="/login", status_code=303)
+def _redirect_login() -> HTTPException:
+    """303 на /login: зависимость не может вернуть Response, поэтому это исключение."""
+    return HTTPException(status_code=303, headers={"Location": "/login"})
 
 
 @app.on_event("startup")
