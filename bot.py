@@ -28,6 +28,11 @@ logging.basicConfig(
 )
 logger = logging.getLogger(__name__)
 
+# httpx/httpcore на INFO пишут полный URL, а в URL Telegram лежит BOT_TOKEN:
+# токен утекал в journald и syslog тысячами строк в сутки.
+for _noisy in ("httpx", "httpcore"):
+    logging.getLogger(_noisy).setLevel(logging.WARNING)
+
 
 # ---------------------------------------------------------------------------
 # Access decorators
