@@ -559,6 +559,12 @@ def main() -> None:
     # Free-text question handler
     app.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, handle_question))
 
+    # Python 3.14: asyncio.get_event_loop() больше не создаёт цикл неявно, а
+    # python-telegram-bot 21.x полагается на это внутри Application.run_polling.
+    try:
+        asyncio.get_event_loop()
+    except RuntimeError:
+        asyncio.set_event_loop(asyncio.new_event_loop())
     app.run_polling(drop_pending_updates=True)
 
 
